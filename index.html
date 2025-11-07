@@ -1,231 +1,169 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Face Recognition App</title>
-<script src="https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js"></script>
-<style>
-  :root {
-    --accent:#06b6d4;
-    --dark:#0f172a;
-    --card:#1e293b;
-    --text:#f1f5f9;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin:0; font-family: "Inter", system-ui, sans-serif;
-    background:var(--dark); color:var(--text);
-    display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
-    padding:10px;
-  }
-  h1 { font-size:1.5rem; margin:10px 0; text-align:center; color:var(--accent); }
-  .container {
-    display:flex; flex-wrap:wrap;
-    justify-content:center; gap:10px; width:100%;
-    max-width:900px;
-  }
-  .panel {
-    background:var(--card); padding:10px; border-radius:10px;
-    flex:1 1 400px; min-width:300px;
-  }
-  video, canvas {
-    width:100%; border-radius:10px; background:black;
-    max-width:100%; height:auto;
-  }
-  .controls {
-    display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:10px;
-  }
-  .btn {
-    flex:1 1 40%;
-    padding:10px; font-weight:600; border:none; border-radius:8px;
-    cursor:pointer; color:var(--dark); background:var(--accent);
-    transition:0.2s;
-  }
-  .btn.secondary {
-    background:#334155; color:var(--text);
-  }
-  .btn:active { transform:scale(0.98); }
-  input[type=file] { display:none; }
-  .people {
-    margin-top:10px; max-height:200px; overflow:auto; background:#0f172a;
-    padding:8px; border-radius:6px;
-  }
-  .person {
-    display:flex; justify-content:space-between;
-    align-items:center; margin:4px 0; font-size:0.9rem;
-    background:#1e293b; padding:6px 8px; border-radius:6px;
-  }
-  #labelName {
-    width:100%; padding:8px; border-radius:8px; border:none; margin-top:6px;
-  }
-  #rawData {
-    width:100%; height:100px; border-radius:8px;
-    background:#0f172a; color:#94a3b8; margin-top:6px; padding:6px;
-  }
-  @media(max-width:700px) {
-    .container { flex-direction:column; align-items:stretch; }
-    .btn { flex:1 1 45%; }
-  }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Face Recognition App</title>
+
+  <!-- Load face-api.js -->
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: "Poppins", sans-serif;
+      background: linear-gradient(135deg, #2c3e50, #3498db);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      text-align: center;
+    }
+    h1 {
+      font-size: 1.8rem;
+      margin-bottom: 1rem;
+    }
+    #video-container {
+      position: relative;
+      width: 90%;
+      max-width: 400px;
+    }
+    video {
+      width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      background: #000;
+    }
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+    .btn-container {
+      margin-top: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+    }
+    button {
+      background: #fff;
+      color: #3498db;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.3s ease;
+    }
+    button:hover {
+      background: #3498db;
+      color: white;
+      transform: scale(1.05);
+    }
+    @media (max-width: 600px) {
+      h1 {
+        font-size: 1.4rem;
+      }
+      button {
+        width: 80%;
+        font-size: 1rem;
+      }
+    }
+  </style>
 </head>
 <body>
-  <h1>🧠 Face Recognition App</h1>
-  <div class="container">
-    <div class="panel">
-      <video id="video" autoplay muted playsinline></video>
-      <canvas id="overlay"></canvas>
-      <div class="controls">
-        <button class="btn" id="startBtn">Start Camera</button>
-        <button class="btn secondary" id="stopBtn">Stop</button>
-        <label for="fileInput" class="btn secondary">Upload Image</label>
-        <input type="file" id="fileInput" accept="image/*" multiple>
-        <button class="btn secondary" id="captureBtn">Capture</button>
-      </div>
-    </div>
-    <div class="panel">
-      <input id="labelName" placeholder="Enter name (e.g. Alice)">
-      <button class="btn" id="registerBtn">Register</button>
-      <div class="controls">
-        <button class="btn secondary" id="exportBtn">Export</button>
-        <button class="btn secondary" id="importBtn">Import</button>
-        <input type="file" id="importInput" accept="application/json">
-        <button class="btn secondary" id="clearBtn">Clear</button>
-      </div>
-      <div class="people" id="peopleList"></div>
-      <textarea id="rawData" readonly placeholder="Exported JSON data..."></textarea>
-    </div>
+  <h1>Face Recognition App</h1>
+
+  <div id="video-container">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="overlay"></canvas>
   </div>
 
-<script>
-(async () => {
-  const MODEL_URL = './models';
-  const video = document.getElementById('video');
-  const overlay = document.getElementById('overlay');
-  const ctx = overlay.getContext('2d');
-  const fileInput = document.getElementById('fileInput');
-  const labelName = document.getElementById('labelName');
-  const registerBtn = document.getElementById('registerBtn');
-  const peopleList = document.getElementById('peopleList');
-  const rawData = document.getElementById('rawData');
-  const importInput = document.getElementById('importInput');
+  <div class="btn-container">
+    <button id="startBtn">Start Camera</button>
+    <button id="stopBtn">Stop Camera</button>
+    <button id="recognizeBtn">Recognize Face</button>
+  </div>
 
-  let stream, running=false, lastDescriptor=null;
-  let labeledData = JSON.parse(localStorage.getItem('faces')||'{}');
+  <script>
+    const video = document.getElementById("video");
+    const overlay = document.getElementById("overlay");
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const recognizeBtn = document.getElementById("recognizeBtn");
+    let stream = null;
+    let detecting = false;
 
-  // Load face-api models
-  await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
-  await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-  await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+    // ✅ Load face-api models
+    Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri("https://cdn.jsdelivr.net/npm/face-api.js/models"),
+      faceapi.nets.faceLandmark68Net.loadFromUri("https://cdn.jsdelivr.net/npm/face-api.js/models"),
+      faceapi.nets.faceRecognitionNet.loadFromUri("https://cdn.jsdelivr.net/npm/face-api.js/models")
+    ]).then(() => console.log("✅ Face API models loaded"));
 
-  function updateList(){
-    peopleList.innerHTML = '';
-    Object.entries(labeledData).forEach(([name,desc])=>{
-      const div=document.createElement('div');
-      div.className='person';
-      div.innerHTML=`<span>${name} (${desc.length})</span>
-      <button class="btn secondary" style="padding:4px;" data-name="${name}">🗑</button>`;
-      peopleList.appendChild(div);
-    });
-    rawData.value=JSON.stringify(labeledData,null,2);
-    peopleList.querySelectorAll('button[data-name]').forEach(b=>{
-      b.onclick=()=>{
-        delete labeledData[b.dataset.name];
-        save(); updateList();
+    // ✅ Start camera
+    startBtn.addEventListener("click", async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+      } catch (error) {
+        alert("Camera access denied or unavailable!");
+        console.error(error);
       }
     });
-  }
-  function save(){localStorage.setItem('faces',JSON.stringify(labeledData));}
 
-  document.getElementById('startBtn').onclick=async()=>{
-    if(running)return;
-    stream=await navigator.mediaDevices.getUserMedia({video:true});
-    video.srcObject=stream;
-    running=true;
-    detectLoop();
-  };
-  document.getElementById('stopBtn').onclick=()=>{
-    if(stream)stream.getTracks().forEach(t=>t.stop());
-    running=false; ctx.clearRect(0,0,overlay.width,overlay.height);
-  };
-
-  async function detectLoop(){
-    overlay.width=video.videoWidth; overlay.height=video.videoHeight;
-    const labeledDescriptors = Object.entries(labeledData).map(([n,arr])=>
-      new faceapi.LabeledFaceDescriptors(n, arr.map(a=>new Float32Array(a))));
-    const matcher = new faceapi.FaceMatcher(labeledDescriptors,0.55);
-    const dets = await faceapi.detectAllFaces(video).withFaceLandmarks().withFaceDescriptors();
-    ctx.clearRect(0,0,overlay.width,overlay.height);
-    dets.forEach(d=>{
-      const box=d.detection.box;
-      const best=matcher.findBestMatch(d.descriptor);
-      ctx.strokeStyle='#06b6d4'; ctx.lineWidth=2;
-      ctx.strokeRect(box.x,box.y,box.width,box.height);
-      ctx.fillStyle='#06b6d4'; ctx.font='14px sans-serif';
-      ctx.fillText(best.toString(),box.x,box.y-5);
+    // ✅ Stop camera
+    stopBtn.addEventListener("click", () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        video.srcObject = null;
+        stream = null;
+        detecting = false;
+        const ctx = overlay.getContext("2d");
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+      }
     });
-    if(running)requestAnimationFrame(detectLoop);
-  }
 
-  async function extractDescriptor(img){
-    const det = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor();
-    return det ? Array.from(det.descriptor) : null;
-  }
+    // ✅ Recognize face (detects face live)
+    recognizeBtn.addEventListener("click", async () => {
+      if (!stream) {
+        alert("Please start the camera first!");
+        return;
+      }
+      if (detecting) {
+        detecting = false;
+        return;
+      }
 
-  fileInput.onchange=async(e)=>{
-    const files=[...e.target.files];
-    for(const f of files){
-      const img=new Image();
-      img.src=URL.createObjectURL(f);
-      await img.decode();
-      lastDescriptor=await extractDescriptor(img);
-      if(!lastDescriptor)alert('No face detected in '+f.name);
-      else alert('Face captured! Enter name and click Register.');
-    }
-  };
+      detecting = true;
+      overlay.width = video.videoWidth;
+      overlay.height = video.videoHeight;
 
-  document.getElementById('captureBtn').onclick=async()=>{
-    const c=document.createElement('canvas');
-    c.width=video.videoWidth; c.height=video.videoHeight;
-    c.getContext('2d').drawImage(video,0,0);
-    const img=new Image();
-    img.src=c.toDataURL(); await img.decode();
-    lastDescriptor=await extractDescriptor(img);
-    if(lastDescriptor) alert('Face captured! Now enter name and click Register.');
-    else alert('No face detected.');
-  };
+      const displaySize = { width: video.videoWidth, height: video.videoHeight };
+      faceapi.matchDimensions(overlay, displaySize);
 
-  registerBtn.onclick=()=>{
-    const name=labelName.value.trim();
-    if(!name||!lastDescriptor)return alert('Enter name and capture/upload first.');
-    labeledData[name]=labeledData[name]||[];
-    labeledData[name].push(lastDescriptor);
-    save(); updateList();
-    labelName.value=''; lastDescriptor=null;
-    alert('Registered '+name);
-  };
+      const ctx = overlay.getContext("2d");
 
-  document.getElementById('exportBtn').onclick=()=>{
-    const blob=new Blob([JSON.stringify(labeledData)],{type:'application/json'});
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob); a.download='faces.json'; a.click();
-  };
-
-  document.getElementById('importBtn').onclick=()=>importInput.click();
-  importInput.onchange=async(e)=>{
-    const txt=await e.target.files[0].text();
-    try{labeledData=JSON.parse(txt); save(); updateList(); alert('Imported!');}
-    catch{alert('Invalid JSON');}
-  };
-
-  document.getElementById('clearBtn').onclick=()=>{
-    if(confirm('Clear all saved data?')){
-      labeledData={}; save(); updateList();
-    }
-  };
-
-  updateList();
-})();
-</script>
+      async function detectFaces() {
+        if (!detecting) return;
+        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
+        const resizedDetections = faceapi.resizeResults(detections, displaySize);
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+        faceapi.draw.drawDetections(overlay, resizedDetections);
+        faceapi.draw.drawFaceLandmarks(overlay, resizedDetections);
+        requestAnimationFrame(detectFaces);
+      }
+      detectFaces();
+    });
+  </script>
 </body>
 </html>
