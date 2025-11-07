@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Face Recognition App</title>
+  <title>Face Detection App</title>
 
   <!-- Load face-api.js -->
   <script defer src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
@@ -15,7 +15,7 @@
     body {
       margin: 0;
       font-family: "Poppins", sans-serif;
-      background: linear-gradient(135deg, #2c3e50, #3498db);
+      background: linear-gradient(135deg, #1d3557, #457b9d);
       color: white;
       display: flex;
       flex-direction: column;
@@ -23,6 +23,7 @@
       justify-content: center;
       height: 100vh;
       text-align: center;
+      overflow: hidden;
     }
     h1 {
       font-size: 1.8rem;
@@ -32,19 +33,19 @@
       position: relative;
       width: 90%;
       max-width: 400px;
-    }
-    video {
-      width: 100%;
       border-radius: 12px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-      background: #000;
+      overflow: hidden;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    }
+    video, canvas {
+      width: 100%;
+      height: auto;
+      border-radius: 12px;
     }
     canvas {
       position: absolute;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
     }
     .btn-container {
       margin-top: 20px;
@@ -54,24 +55,24 @@
       gap: 10px;
     }
     button {
-      background: #fff;
-      color: #3498db;
+      background: #f1faee;
+      color: #1d3557;
       border: none;
       padding: 12px 20px;
       border-radius: 8px;
       font-size: 1rem;
       font-weight: bold;
       cursor: pointer;
-      transition: 0.3s ease;
+      transition: all 0.3s ease;
     }
     button:hover {
-      background: #3498db;
+      background: #1d3557;
       color: white;
       transform: scale(1.05);
     }
     @media (max-width: 600px) {
       h1 {
-        font-size: 1.4rem;
+        font-size: 1.5rem;
       }
       button {
         width: 80%;
@@ -81,7 +82,7 @@
   </style>
 </head>
 <body>
-  <h1>Face Recognition App</h1>
+  <h1>Face Detection App</h1>
 
   <div id="video-container">
     <video id="video" autoplay muted playsinline></video>
@@ -90,8 +91,8 @@
 
   <div class="btn-container">
     <button id="startBtn">Start Camera</button>
+    <button id="detectBtn">Detect Faces</button>
     <button id="stopBtn">Stop Camera</button>
-    <button id="recognizeBtn">Recognize Face</button>
   </div>
 
   <script>
@@ -99,7 +100,8 @@
     const overlay = document.getElementById("overlay");
     const startBtn = document.getElementById("startBtn");
     const stopBtn = document.getElementById("stopBtn");
-    const recognizeBtn = document.getElementById("recognizeBtn");
+    const detectBtn = document.getElementById("detectBtn");
+
     let stream = null;
     let detecting = false;
 
@@ -108,16 +110,16 @@
       faceapi.nets.tinyFaceDetector.loadFromUri("https://cdn.jsdelivr.net/npm/face-api.js/models"),
       faceapi.nets.faceLandmark68Net.loadFromUri("https://cdn.jsdelivr.net/npm/face-api.js/models"),
       faceapi.nets.faceRecognitionNet.loadFromUri("https://cdn.jsdelivr.net/npm/face-api.js/models")
-    ]).then(() => console.log("✅ Face API models loaded"));
+    ]).then(() => console.log("✅ Face API models loaded successfully"));
 
     // ✅ Start camera
     startBtn.addEventListener("click", async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: true });
         video.srcObject = stream;
-      } catch (error) {
+      } catch (err) {
         alert("Camera access denied or unavailable!");
-        console.error(error);
+        console.error(err);
       }
     });
 
@@ -125,44 +127,52 @@
     stopBtn.addEventListener("click", () => {
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
-        video.srcObject = null;
         stream = null;
-        detecting = false;
-        const ctx = overlay.getContext("2d");
-        ctx.clearRect(0, 0, overlay.width, overlay.height);
+        video.srcObject = null;
       }
+      detecting = false;
+      const ctx = overlay.getContext("2d");
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
     });
 
-    // ✅ Recognize face (detects face live)
-    recognizeBtn.addEventListener("click", async () => {
+    // ✅ Detect faces in real time
+    detectBtn.addEventListener("click", async () => {
       if (!stream) {
         alert("Please start the camera first!");
         return;
       }
+
       if (detecting) {
         detecting = false;
+        detectBtn.textContent = "Detect Faces";
         return;
       }
 
       detecting = true;
+      detectBtn.textContent = "Stop Detection";
+
       overlay.width = video.videoWidth;
       overlay.height = video.videoHeight;
 
       const displaySize = { width: video.videoWidth, height: video.videoHeight };
       faceapi.matchDimensions(overlay, displaySize);
-
       const ctx = overlay.getContext("2d");
 
-      async function detectFaces() {
+      async function detect() {
         if (!detecting) return;
-        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
-        const resizedDetections = faceapi.resizeResults(detections, displaySize);
+        const detections = await faceapi
+          .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+          .withFaceLandmarks();
+
+        const resized = faceapi.resizeResults(detections, displaySize);
         ctx.clearRect(0, 0, overlay.width, overlay.height);
-        faceapi.draw.drawDetections(overlay, resizedDetections);
-        faceapi.draw.drawFaceLandmarks(overlay, resizedDetections);
-        requestAnimationFrame(detectFaces);
+        faceapi.draw.drawDetections(overlay, resized);
+        faceapi.draw.drawFaceLandmarks(overlay, resized);
+
+        requestAnimationFrame(detect);
       }
-      detectFaces();
+
+      detect();
     });
   </script>
 </body>
