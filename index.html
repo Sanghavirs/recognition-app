@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Face Recognition App — Single File</title>
+
+<!-- Minimal styling -->
+<style>
+  :root{
+    --bg:#0f1724;
+    --card:#0b1220;
+    --accent:#06b6d4;
+    --muted:#94a3b8;
+    --glass: rgba(255,255,255,0.03);
+  }
+  html,body{height:100%; margin:0; font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+  body{background:linear-gradient(180deg,#071026 0%, #071b2a 100%); color:#e6eef6; display:flex; align-items:center; justify-content:center; padding:20px; box-sizing:border-box;}
+  .wrapper{width:100%; max-width:1100px; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-radius:12px; box-shadow:0 6px 30px rgba(2,6,23,0.7); overflow:hidden; display:grid; grid-template-columns: 640px 1fr; gap:18px; padding:18px;}
+  .panel{background:var(--card); border-radius:10px; padding:12px; min-height:420px; display:flex; flex-direction:column; gap:8px;}
+  .left{align-items:center; justify-content:center;}
+  #video{border-radius:8px; background:#000; max-width:100%; width:640px; height:480px; object-fit:cover; transform:scaleX(-1);} /* flip for mirror */
+  canvas{position:absolute; left:0; top:0; transform:scaleX(-1);} /* overlay canvas flipped to match video */
+  .controls{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;}
+  .btn{background:var(--glass); color:var(--accent); border:1px solid rgba(255,255,255,0.03); padding:8px 10px; border-radius:8px; cursor:pointer; font-weight:600;}
+  .btn.primary{background:linear-gradient(90deg,var(--accent),#4dd1f2); color:#032024; border:none;}
+  input[type="file"]{display:none;}
+  .right .section{background:transparent; padding:8px; border-radius:8px;}
+  label.small{font-size:12px; color:var(--muted);}
+  .list{max-height:220px; overflow:auto; margin-top:6px; display:flex; flex-direction:column; gap:6px;}
+  .list .item{display:flex; align-items:center; justify-content:space-between; padding:8px; background:rgba(255,255,255,0.02); border-radius:8px;}
+  .name{font-weight:700;}
+  .muted{color:var(--muted); font-size:13px;}
+  .footer{font-size:13px; color:var(--muted); margin-top:auto;}
+  .input-row{display:flex; gap:8px; align-items:center;}
+  textarea{width:100%; height:120px; background:transparent; color:inherit; border:1px dashed rgba(255,255,255,0.03); padding:8px; border-radius:6px; resize:vertical;}
+  .center{display:flex; gap:8px; align-items:center;}
+  .small{font-size:13px;}
+  .hint{font-size:12px; color:var(--muted);}
+</style>
+
+</head>
+<body>
+  <div class="wrapper" role="application" aria-label="Face recognition app">
+    <div class="panel left">
+      <div style="position:relative; width:640px; height:480px;">
+        <video id="video" autoplay muted playsinline width="640" height="480" ></video>
+        <canvas id="overlay" width="640" height="480"></canvas>
+      </div>
+
+      <div class="controls" aria-hidden="false">
+        <button id="startBtn" class="btn primary">Start Camera</button>
+        <button id="stopBtn" class="btn">Stop Camera</button>
+
+        <label class="btn" for="fileInput" title="Upload images to register a person">Upload Image</label>
+        <input id="fileInput" type="file" accept="image/*" multiple>
+
+        <button id="captureRegister" class="btn">Capture & Register</button>
+        <button id="clearData" class="btn">Clear Saved Data</button>
+      </div>
+
+      <div class="controls" style="margin-top:6px;">
+        <div class="hint">Model status: <span id="modelStatus" class="muted">loading...</span></div>
+      </div>
+
+      <div style="margin-top:6px;" class="hint small">Tip: Register at least 1-3 photos per person for better recognition. Use "Export" to save labeled data and "Import" to restore on another machine.</div>
+    </div>
+
+    <div class="panel right">
+      <div class="section">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div><strong>Registered People</strong><div class="muted" style="font-weight:600; font-size:12px;">Stored in browser localStorage</div></div>
+          <div style="display:flex; gap:8px;">
+            <button id="exportBtn" class="btn">Export</button>
+            <button id="importBtn" class="btn">Import</button>
+            <input id="importInput" type="file" accept="application/json" style="display:none;">
+          </div>
+        </div>
+
+        <div class="list" id="peopleList" aria-live="polite" style="margin-top:8px;">
+          <!-- populated -->
+        </div>
+      </div>
+
+      <div class="section" style="margin-top:12px;">
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input id="labelName" placeholder="Person name (e.g., Alice)" style="flex:1; padding:8px; border-radius:8px; background:transparent; border:1px solid rgba(255,255,255,0.03); color:inherit;">
+          <button id="registerFromCapture" class="btn">Register Name</button>
+        </div>
+        <div class="hint" style="margin-top:6px;">Use "Upload Image" to select photos, or point the camera and press "Capture & Register" then enter name and click "Register Name".</div>
+      </div>
+
+      <div class="section" style="margin-top:12px;">
+        <strong>Debug / Raw Data</strong>
+        <textarea id="rawData" readonly class="muted" placeholder="Exported JSON appears here..."></textarea>
+      </div>
+
+      <div class="footer">Built with face-api.js — single-file demo. Keep models folder next to this file as <code>/models/</code>.</div>
+    </div>
+  </div>
+
+<!-- face-api.js from unpkg CDN -->
+<script src="https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
+<script>
+(async () => {
+  // Configuration
+  const MODEL_URL = './models' ; // <-- ensure models are placed here
+  const video = document.getElementById('video');
+  const overlay = document.getElementById('overlay');
+  const ctx = overlay.getContext('2d');
+  const modelStatus = document.getElementById('modelStatus');
+  const peopleList = document.getElementById('peopleList');
+  const rawData = document.getElementById('rawData');
+
+  // UI elements
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const fileInput = document.getElementById('fileInput');
+  const captureRegister = document.getElementById('captureRegister');
+  const labelName = document.getElementById('labelName');
+  const registerFromCapture = document.getElementById('registerFromCapture');
+  const clearDataBtn = document.getElementById('clearData');
+  const exportBtn = document.getElementById('exportBtn');
+  const importBtn = document.getElementById('importBtn');
+  const importInput = document.getElementById('importInput');
+
+  let stream = null;
+  let running = false;
+  let labeledDescriptors = {}; // name -> array of Float32Array descriptors
+  const MAX_RESULTS = 20;
+  const MATCH_THRESHOLD = 0.55; // lower = stricter
+
+  // load models
+  async function loadModels() {
+    try {
+      modelStatus.textContent = 'loading models...';
+      // Models: SSD (detection), landmark, face recognition
+      await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
+      await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+      await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+      modelStatus.textContent = 'models loaded';
+    } catch (err) {
+      modelStatus.textContent = 'error loading models';
+      console.error('model load error', err);
+      alert('Could not load models. Ensure the `models/` folder is present and served. See console for details.');
+    }
+  }
+
+  // start camera
+  async function startCamera() {
+    if (stream) return;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { width:640, height:480 }, audio: false });
+      video.srcObject = stream;
+      await video.play();
+      overlay.width = video.videoWidth || 640;
+      overlay.height = video.videoHeight || 480;
+      running = true;
+      runRecognitionLoop();
+    } catch (err) {
+      alert('Could not access camera: ' + err.message);
+      console.error(err);
+    }
+  }
+
+  function stopCamera() {
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+    }
+    ctx.clearRect(0,0,overlay.width, overlay.height);
+    running = false;
+  }
+
+  startBtn.onclick = startCamera;
+  stopBtn.onclick = () => { stopCamera(); };
+
+  // Recognition loop
+  async function runRecognitionLoop() {
+    if (!running) return;
+    if (!faceapi.nets.ssdMobilenetv1.params) {
+      // models might not be loaded yet
+      console.warn('models not ready yet');
+      setTimeout(runRecognitionLoop, 300);
+      return;
+    }
+
+    // detect all faces
+    const detections = await faceapi.detectAllFaces(video).withFaceLandmarks().withFaceDescriptors();
+
+    // draw
+    ctx.clearRect(0,0,overlay.width, overlay.height);
+    ctx.lineWidth = 2;
+
+    if (detections.length > 0) {
+      const labeledFaceDescriptors = buildLabeledFaceDescriptorsFromStorage();
+      const faceMatcher = new faceapi.FaceMatcher(labeledFaceDescriptors, MATCH_THRESHOLD);
+
+      detections.forEach(det => {
+        const box = det.detection.box;
+        const descriptor = det.descriptor;
+        const best = faceMatcher.findBestMatch(descriptor);
+        // draw box
+        ctx.strokeStyle = 'rgba(6,182,212,0.9)';
+        ctx.strokeRect(box.x, box.y, box.width, box.height);
+        ctx.fillStyle = 'rgba(6,182,212,0.9)';
+        const labelText = best.label === 'unknown' ? 'Unknown' : `${best.label} (${(1-best.distance).toFixed(2)})`;
+        const textWidth = ctx.measureText(labelText).width + 8;
+        const textHeight = 18;
+        ctx.fillRect(box.x, box.y - textHeight - 6, textWidth, textHeight + 4);
+        ctx.fillStyle = '#00181b';
+        ctx.font = '14px Inter, Arial';
+        ctx.fillText(labelText, box.x + 4, box.y - 6);
+      });
+    }
+
+    requestAnimationFrame(runRecognitionLoop);
+  }
+
+  // Utility: convert stored descriptors -> faceapi.LabeledFaceDescriptors
+  function buildLabeledFaceDescriptorsFromStorage() {
+    return Object.keys(labeledDescriptors).map(name => {
+      const arr = labeledDescriptors[name].map(a => new Float32Array(Object.values(a)));
+      return new faceapi.LabeledFaceDescriptors(name, arr);
+    });
+  }
+
+  // File (image) upload to register - can be multiple images
+  fileInput.addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    for (const f of files) {
+      try {
+        const img = await loadImageFromFile(f);
+        await processAndStoreImage(img);
+      } catch (err) {
+        console.error('file process error', err);
+      }
+    }
+    updatePeopleList();
+    fileInput.value = '';
+  });
+
+  // helper to load image element from file
+  function loadImageFromFile(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  // Process image (detect face and save descriptor)
+  async function processAndStoreImage(img) {
+    const detection = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor();
+    if (!detection) {
+      alert('No face detected in image: ' + (img.src || 'uploaded image'));
+      return;
+    }
+    // temporarily store descriptor to a staging area in memory
+    // we put staging descriptor into local var until user provides name
+    lastCapturedDescriptor = Array.from(detection.descriptor); // JS array of numbers
+    // also show preview / hint
+    rawData.value = JSON.stringify({ lastCapturedDescriptor: lastCapturedDescriptor.slice(0,16) , note: 'first 16 numbers shown' }, null, 2);
+    alert('Face captured. Enter a name on the right and click "Register Name" to save.');
+  }
+
+  // capture from video (current frame) and store descriptor
+  let lastCapturedDescriptor = null;
+  captureRegister.addEventListener('click', async () => {
+    if (!video || video.paused) { alert('Start the camera first.'); return; }
+    // create a temporary canvas and copy frame
+    const tmp = document.createElement('canvas');
+    tmp.width = video.videoWidth;
+    tmp.height = video.videoHeight;
+    const tctx = tmp.getContext('2d');
+    tctx.drawImage(video, 0, 0, tmp.width, tmp.height);
+    const img = new Image();
+    img.src = tmp.toDataURL('image/png');
+    await img.decode();
+    await processAndStoreImage(img);
+  });
+
+  // Register the staged descriptor with a name
+  registerFromCapture.addEventListener('click', () => {
+    const name = (labelName.value || '').trim();
+    if (!name) { alert('Enter a name first.'); return; }
+    if (!lastCapturedDescriptor) { alert('No captured face data. Upload or capture an image first.'); return; }
+    if (!labeledDescriptors[name]) labeledDescriptors[name] = [];
+    labeledDescriptors[name].push(lastCapturedDescriptor.slice()); // push copy
+    lastCapturedDescriptor = null;
+    labelName.value = '';
+    persistDescriptors();
+    updatePeopleList();
+    alert('Registered ' + name);
+  });
+
+  // Clear stored data
+  clearDataBtn.addEventListener('click', () => {
+    if (!confirm('Clear all saved labeled face data?')) return;
+    labeledDescriptors = {};
+    persistDescriptors();
+    updatePeopleList();
+  });
+
+  // Export / Import
+  exportBtn.addEventListener('click', () => {
+    const payload = JSON.stringify(labeledDescriptors);
+    rawData.value = payload;
+    downloadStringAsFile(payload, 'labeled-descriptors.json');
+  });
+  importBtn.addEventListener('click', () => importInput.click());
+  importInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const text = await file.text();
+    try {
+      const parsed = JSON.parse(text);
+      // basic validation: object with name -> array
+      if (typeof parsed !== 'object' || parsed === null) throw new Error('invalid');
+      labeledDescriptors = parsed;
+      persistDescriptors();
+      updatePeopleList();
+      alert('Imported labeled descriptors');
+    } catch (err) {
+      alert('Import failed: ' + err.message);
+    }
+    importInput.value = '';
+  });
+
+  // persist to localStorage
+  function persistDescriptors() {
+    try {
+      localStorage.setItem('face_labeled_descriptors_v1', JSON.stringify(labeledDescriptors));
+    } catch (err) {
+      console.error('storage error', err);
+    }
+  }
+
+  // load from localStorage
+  function loadFromStorage() {
+    try {
+      const raw = localStorage.getItem('face_labeled_descriptors_v1');
+      if (raw) {
+        labeledDescriptors = JSON.parse(raw);
+      } else {
+        labeledDescriptors = {};
+      }
+    } catch (err) {
+      labeledDescriptors = {};
+    }
+    updatePeopleList();
+  }
+
+  // update UI list of registered people
+  function updatePeopleList() {
+    peopleList.innerHTML = '';
+    const names = Object.keys(labeledDescriptors);
+    if (!names.length) {
+      peopleList.innerHTML = '<div class="muted">No registered people yet.</div>';
+      rawData.value = '';
+      return;
+    }
+    names.forEach(name => {
+      const count = labeledDescriptors[name].length;
+      const item = document.createElement('div'); item.className = 'item';
+      item.innerHTML = `<div style="display:flex; flex-direction:column;">
+                          <div class="name">${escapeHtml(name)}</div>
+                          <div class="muted small">${count} sample(s)</div>
+                        </div>
+                        <div style="display:flex; gap:6px; align-items:center;">
+                          <button class="btn" data-name="${escapeHtml(name)}" title="Remove one sample">−</button>
+                          <button class="btn" data-name-rm="${escapeHtml(name)}" title="Delete all samples">🗑</button>
+                        </div>`;
+      peopleList.appendChild(item);
+    });
+
+    // attach handlers
+    peopleList.querySelectorAll('button[data-name]').forEach(b => {
+      b.onclick = (e) => {
+        const nm = e.currentTarget.getAttribute('data-name');
+        if (!nm || !labeledDescriptors[nm]) return;
+        labeledDescriptors[nm].pop();
+        if (labeledDescriptors[nm].length === 0) delete labeledDescriptors[nm];
+        persistDescriptors();
+        updatePeopleList();
+      };
+    });
+    peopleList.querySelectorAll('button[data-name-rm]').forEach(b => {
+      b.onclick = (e) => {
+        const nm = e.currentTarget.getAttribute('data-name-rm');
+        if (!nm) return;
+        if (!confirm('Delete all samples for ' + nm + '?')) return;
+        delete labeledDescriptors[nm];
+        persistDescriptors();
+        updatePeopleList();
+      };
+    });
+
+    // also update rawData text
+    rawData.value = JSON.stringify(labeledDescriptors, null, 2);
+  }
+
+  // small helpers
+  function escapeHtml(s){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]); }
+  function downloadStringAsFile(str, filename) {
+    const blob = new Blob([str], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+    a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  // load models then localStorage
+  await loadModels();
+  loadFromStorage();
+
+  // automatically start camera if allowed (attempt)
+  // optional: you can comment this out if you prefer manual start
+  // startCamera();
+
+  // legacy: toggle debug view
+  // window.labeledDescriptors = labeledDescriptors; // for console debugging
+
+  // On page unload, stop camera
+  window.addEventListener('beforeunload', () => {
+    stopCamera();
+  });
+
+})();
+</script>
+</body>
+</html>
